@@ -1,0 +1,10 @@
+C:\Users\colli\OneDrive\Projects\boplMorePlayers\obj\Debug\netstandard2.1\BoplMorePlayersLocal8.csproj.AssemblyReference.cache
+C:\Users\colli\OneDrive\Projects\boplMorePlayers\obj\Debug\netstandard2.1\BoplMorePlayersLocal8.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\colli\OneDrive\Projects\boplMorePlayers\obj\Debug\netstandard2.1\BoplMorePlayersLocal8.AssemblyInfoInputs.cache
+C:\Users\colli\OneDrive\Projects\boplMorePlayers\obj\Debug\netstandard2.1\BoplMorePlayersLocal8.AssemblyInfo.cs
+C:\Users\colli\OneDrive\Projects\boplMorePlayers\obj\Debug\netstandard2.1\BoplMorePlayersLocal8.csproj.CoreCompileInputs.cache
+C:\Users\colli\OneDrive\Projects\boplMorePlayers\bin\Debug\netstandard2.1\BoplMorePlayersLocal8.deps.json
+C:\Users\colli\OneDrive\Projects\boplMorePlayers\bin\Debug\netstandard2.1\BoplMorePlayersLocal8.dll
+C:\Users\colli\OneDrive\Projects\boplMorePlayers\bin\Debug\netstandard2.1\BoplMorePlayersLocal8.pdb
+C:\Users\colli\OneDrive\Projects\boplMorePlayers\obj\Debug\netstandard2.1\BoplMorePlayersLocal8.dll
+C:\Users\colli\OneDrive\Projects\boplMorePlayers\obj\Debug\netstandard2.1\BoplMorePlayersLocal8.pdb
