@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "k7bYkjdFYf8=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\colli\\OneDrive\\Projects\\boplMorePlayers\\BoplMorePlayersLocal8.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\colli\\.nuget\\packages\\netstandard.library.ref\\2.1.0\\netstandard.library.ref.2.1.0.nupkg.sha512"
+  ],
+  "logs": []
+}
