@@ -134,7 +134,7 @@ internal static class CharacterSelectExpander
 
         if (Plugin.RepositionCharacterSelectBoxes.Value)
         {
-            RepositionBoxes(handler, boxes);
+            RepositionBoxes(handler, boxes, beforeCount);
         }
 
 
@@ -191,6 +191,17 @@ internal static class CharacterSelectExpander
             Traverse.Create(clone).Field<CharSelectMenu>("menuState").Value = (CharSelectMenu)0;
 
             RebindNestedCharacterSelectReferences(clone);
+
+            // Destroy the cloned CharSelectClickToJoin listener so this box doesn't independently
+            // claim controller input. The original vanilla instances on boxes 1-4 already route
+            // joins to slots 5-8 via our CurrentlyActiveIndex patch.
+            var clickToJoin = cloneGo.GetComponentInChildren<CharSelectClickToJoin>(includeInactive: true);
+            if (clickToJoin != null)
+            {
+                UnityEngine.Object.Destroy(clickToJoin);
+                RuntimeSnapshot.Log($"Destroyed duplicate CharSelectClickToJoin on clone slot {slot}.", verbose: false);
+            }
+
             clone.OnEnterJoin();
 
             expanded.Add(clone);
@@ -210,7 +221,12 @@ internal static class CharacterSelectExpander
                 continue;
             }
 
-            var field = AccessTools.Field(component.GetType(), "csb");
+            var field = component.GetType().GetField(
+                "csb",
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic);
+
             if (field == null || field.FieldType != ownerType)
             {
                 continue;
@@ -252,36 +268,53 @@ internal static class CharacterSelectExpander
         RuntimeSnapshot.Log($"Expanded animateOutDelays from {existing.Length} to {expanded.Length}.", verbose: false);
     }
 
-    private static void RepositionBoxes(CharacterSelectHandler handler, CharacterSelectBox[] boxes)
+    private static void RepositionBoxes(CharacterSelectHandler handler, CharacterSelectBox[] boxes, int originalCount)
     {
-        if (boxes.Length <= 4)
+        if (boxes.Length <= originalCount || originalCount <= 0)
         {
             return;
         }
 
-        var rects = boxes
+        var originalRects = boxes
+            .Take(originalCount)
             .Select(box => box.GetComponent<RectTransform>())
             .Where(rect => rect != null)
             .Cast<RectTransform>()
             .ToArray();
 
-        if (rects.Length == 0)
+        if (originalRects.Length == 0)
         {
             return;
         }
 
-        var centerX = rects.Average(rect => rect.anchoredPosition.x);
-        var centerY = rects.Average(rect => rect.anchoredPosition.y);
-        var xMin = rects.Min(rect => rect.anchoredPosition.x);
-        var xMax = rects.Max(rect => rect.anchoredPosition.x);
-
-        var columns = Mathf.Min(4, boxes.Length);
+        var columns = originalRects.Length;
         var rows = Mathf.CeilToInt(boxes.Length / (float)columns);
-        var xSpan = columns <= 1 ? 0f : Mathf.Max(800f, Mathf.Abs(xMax - xMin));
-        var rowSpacing = Mathf.Max(170f, rects[0].rect.height * 1.05f);
-        var scale = boxes.Length > 4 ? 0.9f : 1f;
 
-        for (var i = 0; i < boxes.Length; i++)
+        var minX = originalRects.Min(rect => rect.anchoredPosition.x);
+        var maxX = originalRects.Max(rect => rect.anchoredPosition.x);
+        var centerX = (minX + maxX) * 0.5f;
+        var centerY = originalRects.Average(rect => rect.anchoredPosition.y);
+
+        var templateWidth = boxes
+            .Take(originalCount)
+            .Select(MeasureJoinCardWidth)
+            .DefaultIfEmpty(260f)
+            .Max();
+
+        var baselineSpan = Mathf.Max(maxX - minX, templateWidth * 3.2f);
+        var sidePadding = templateWidth * 0.15f;
+        var availableWidth = baselineSpan + (sidePadding * 2f);
+
+        var count = boxes.Length;
+        var spacing = count <= 1 ? 0f : availableWidth / (count - 1);
+        var desiredVisualWidth = spacing * 0.93f;
+        var scale = Mathf.Clamp(desiredVisualWidth / templateWidth, 0.40f, 1f);
+        var firstX = centerX - (spacing * (count - 1) * 0.5f);
+        var rowY = centerY;
+
+        var placementLog = new List<string>(count);
+
+        for (var i = 0; i < count; i++)
         {
             var rect = boxes[i].GetComponent<RectTransform>();
             if (rect == null)
@@ -289,32 +322,66 @@ internal static class CharacterSelectExpander
                 continue;
             }
 
-            var row = i / columns;
-            var col = i % columns;
-
-            var xT = columns <= 1 ? 0.5f : col / (float)(columns - 1);
-            var x = Mathf.Lerp(centerX - (xSpan * 0.5f), centerX + (xSpan * 0.5f), xT);
-
-            var rowOffset = ((rows - 1) * 0.5f) - row;
-            var y = centerY + (rowOffset * rowSpacing);
-
-            rect.anchoredPosition = new Vector2(x, y);
-            rect.localScale = Vector3.one * scale;
+            var x = firstX + (i * spacing);
+            rect.anchoredPosition = new Vector2(x, rowY);
+            // Keep root at scale 1 so parked panels (y=3000) land at world y=3000 (off-screen).
+            // Shrink only the visible children so the row fits without fighting the game's Y-management.
+            rect.localScale = Vector3.one;
+            ScaleVisibleChildren(boxes[i], scale);
+            placementLog.Add($"slot={i + 1} x={x:0.0} y={rowY:0.0} scale={scale:0.000}");
         }
 
-        var startButton = Traverse.Create(handler).Field<AnimateInOutUI>("startButton").Value;
-        if (startButton != null)
+        RuntimeSnapshot.Log(
+            $"Repositioned character select to single row: slots={count}, baseColumns={columns}, rowsBeforeCompression={rows}, centerX={centerX:0.0}, centerY={centerY:0.0}, rowY={rowY:0.0}, availableWidth={availableWidth:0.0}, spacing={spacing:0.0}, templateVisualWidth={templateWidth:0.0}, desiredVisualWidth={desiredVisualWidth:0.0}, scale={scale:0.000}.",
+            verbose: false);
+        RuntimeSnapshot.Log($"Row placement details: {string.Join(" | ", placementLog)}", verbose: false);
+    }
+
+    private static float MeasureJoinCardWidth(CharacterSelectBox box)
+    {
+        var joinBorder = Traverse.Create(box).Field<RectTransform>("joinBorder").Value;
+        if (joinBorder != null)
         {
-            var startRect = startButton.GetComponent<RectTransform>();
-            if (startRect != null)
+            var parent = joinBorder.parent;
+            if (parent == null)
             {
-                var minY = rects.Min(rect => rect.anchoredPosition.y);
-                startRect.anchoredPosition = new Vector2(startRect.anchoredPosition.x, minY - (rowSpacing * 0.85f));
+                return Mathf.Max(220f, joinBorder.rect.width);
             }
+
+            var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, joinBorder);
+            return Mathf.Max(joinBorder.rect.width, bounds.size.x);
         }
 
-        Traverse.Create(handler).Field<Vector2>("center").Value = new Vector2(centerX, centerY - (rowSpacing * 0.2f));
-        RuntimeSnapshot.Log($"Repositioned character select layout for {boxes.Length} boxes ({columns}x{rows}).", verbose: false);
+        var rootRect = box.GetComponent<RectTransform>();
+        if (rootRect == null)
+        {
+            return 260f;
+        }
+
+        return Mathf.Max(220f, rootRect.rect.width * 2f);
+    }
+
+    // Scale every direct child of the box. Parked panels (SELECT_COLOR, SELECT_BORDER,
+    // AbilityGrid_leaveActive) keep their anchoredPosition — localScale only shrinks their own
+    // contents, not their Y offset. So y=3000 parking still places them off-screen, and the game's
+    // own slide-down animation still works, just at the reduced size that matches the row.
+    private static void ScaleVisibleChildren(CharacterSelectBox box, float scale)
+    {
+        if (scale <= 0f || Mathf.Approximately(scale, 1f))
+        {
+            return;
+        }
+
+        var scaleVec = Vector3.one * scale;
+        var scaled = new List<string>();
+        for (var i = 0; i < box.transform.childCount; i++)
+        {
+            var child = box.transform.GetChild(i);
+            child.localScale = scaleVec;
+            scaled.Add(child.name);
+        }
+
+        RuntimeSnapshot.Log($"Box '{box.name}' scaled all {scaled.Count} children [{string.Join(",", scaled)}] to {scale:0.000}.", verbose: false);
     }
 }
 

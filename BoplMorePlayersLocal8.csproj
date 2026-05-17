@@ -4,23 +4,19 @@
     <AssemblyName>BoplMorePlayersLocal8</AssemblyName>
     <RootNamespace>BoplMorePlayersLocal8</RootNamespace>
     <Description>8-player local couch multiplayer expansion for Bopl Battle.</Description>
-    <Version>0.1.0</Version>
+    <Version>0.0.4</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
-
   <PropertyGroup>
     <BoplBattleRootDir Condition="'$(BoplBattleRootDir)' == '' and '$(BOPL_BATTLE_ROOT)' != ''">$(BOPL_BATTLE_ROOT)</BoplBattleRootDir>
     <BoplProfileDir Condition="'$(BoplProfileDir)' == '' and '$(BOPL_PROFILE_DIR)' != ''">$(BOPL_PROFILE_DIR)</BoplProfileDir>
-
     <BoplBattleManagedDir Condition="'$(BoplBattleManagedDir)' == '' and '$(BoplBattleRootDir)' != '' and Exists('$(BoplBattleRootDir)\\BoplBattle_Data\\Managed')">$(BoplBattleRootDir)\BoplBattle_Data\Managed</BoplBattleManagedDir>
     <BoplBattleManagedDir Condition="'$(BoplBattleManagedDir)' == '' and '$(BoplBattleRootDir)' != '' and Exists('$(BoplBattleRootDir)\\Bopl_Data\\Managed')">$(BoplBattleRootDir)\Bopl_Data\Managed</BoplBattleManagedDir>
-
     <BepInExCoreDir Condition="'$(BepInExCoreDir)' == '' and '$(BoplProfileDir)' != ''">$(BoplProfileDir)\BepInEx\core</BepInExCoreDir>
     <DeployDir Condition="'$(DeployDir)' == '' and '$(BoplProfileDir)' != ''">$(BoplProfileDir)\BepInEx\plugins\BoplMorePlayersLocal8</DeployDir>
   </PropertyGroup>
-
   <Target Name="ValidateReferences" BeforeTargets="ResolveReferences">
     <Error Condition="'$(BoplBattleManagedDir)' == ''" Text="Set BOPL_BATTLE_ROOT or pass -p:BoplBattleRootDir=... before building." />
     <Error Condition="'$(BepInExCoreDir)' == ''" Text="Set BOPL_PROFILE_DIR or pass -p:BoplProfileDir=... before building." />
@@ -28,7 +24,6 @@
     <Error Condition="!Exists('$(BepInExCoreDir)\\BepInEx.dll')" Text="Could not find BepInEx.dll under $(BepInExCoreDir)." />
     <Error Condition="!Exists('$(BepInExCoreDir)\\0Harmony.dll')" Text="Could not find 0Harmony.dll under $(BepInExCoreDir)." />
   </Target>
-
   <ItemGroup>
     <Reference Include="0Harmony">
       <HintPath>$(BepInExCoreDir)\0Harmony.dll</HintPath>
@@ -63,9 +58,24 @@
       <Private>false</Private>
     </Reference>
   </ItemGroup>
-
   <Target Name="DeployToProfile" AfterTargets="Build" Condition="'$(DeployDir)' != ''">
     <MakeDir Directories="$(DeployDir)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(DeployDir)\$(AssemblyName).dll" OverWriteReadOnlyFiles="true" SkipUnchangedFiles="false" />
+  </Target>
+  <!-- Pack a Thunderstore-ready zip: dotnet build -t:PackThunderstore -->
+  <PropertyGroup>
+    <ThunderstoreDir>$(MSBuildProjectDirectory)\thunderstore</ThunderstoreDir>
+    <ThunderstoreStagingDir>$(IntermediateOutputPath)thunderstore_staging</ThunderstoreStagingDir>
+    <ThunderstoreZip>$(MSBuildProjectDirectory)\thunderstore\BoplExpLocal_TestBuild-$(Version).zip</ThunderstoreZip>
+  </PropertyGroup>
+  <Target Name="PackThunderstore" DependsOnTargets="Build">
+    <MakeDir Directories="$(ThunderstoreStagingDir)" />
+    <Copy SourceFiles="$(ThunderstoreDir)\manifest.json" DestinationFolder="$(ThunderstoreStagingDir)" />
+    <Copy SourceFiles="$(ThunderstoreDir)\icon.png" DestinationFolder="$(ThunderstoreStagingDir)" />
+    <Copy SourceFiles="$(ThunderstoreDir)\README.md" DestinationFolder="$(ThunderstoreStagingDir)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ThunderstoreStagingDir)" />
+    <ZipDirectory SourceDirectory="$(ThunderstoreStagingDir)" DestinationFile="$(ThunderstoreZip)" Overwrite="true" />
+    <Message Importance="high" Text="Thunderstore package: $(ThunderstoreZip)" />
+    <RemoveDir Directories="$(ThunderstoreStagingDir)" />
   </Target>
 </Project>
