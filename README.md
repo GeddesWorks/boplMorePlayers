@@ -2,6 +2,10 @@
 
 BepInEx + Harmony mod for local couch expansion to 8 players.
 
+## Input Mirroring
+
+If you want to test an 8-player local session with only one physical controller, enable `Input/MirrorPrimaryInputToExtraLocalPlayers` in the mod config. That mirrors the first local player's live input state onto the other local players during local/offline play.
+
 ## Build
 
 ```powershell

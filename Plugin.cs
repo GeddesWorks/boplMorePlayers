@@ -155,4 +155,5 @@ public sealed class Plugin : BaseUnityPlugin
             Log.LogWarning($"Failed to disable replay recording: {ex.Message}");
         }
     }
+
 }

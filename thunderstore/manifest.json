@@ -1,0 +1,9 @@
+﻿{
+    "name":  "BoplExpLocal_TestBuild",
+    "version_number":  "0.0.4",
+    "website_url":  "",
+    "description":  "Internal test build. Not for public use.",
+    "dependencies":  [
+                         "BepInEx-BepInExPack-5.4.2100"
+                     ]
+}
