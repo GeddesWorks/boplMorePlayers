@@ -1,5 +1,6 @@
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace BoplMorePlayersLocal8.Patches;
 
@@ -10,6 +11,23 @@ internal static class CharacterSelectHandlerAwakePatch
     private static void Postfix(CharacterSelectHandler __instance)
     {
         CharacterSelectExpander.Expand(__instance);
+
+        // Log all connected gamepads for debugging join cap
+        var gamepads = Gamepad.all;
+        var gpInfo = new System.Text.StringBuilder();
+        gpInfo.Append($"Connected gamepads: {gamepads.Count}");
+        for (var i = 0; i < gamepads.Count; i++)
+        {
+            gpInfo.Append($"\n  [{i}] id={gamepads[i].deviceId} name='{gamepads[i].displayName}'");
+        }
+        RuntimeSnapshot.Log(gpInfo.ToString(), verbose: false);
+
+        // Log CharSelectClickToJoin instances
+        var clickToJoins = UnityEngine.Object.FindObjectsOfType<CharSelectClickToJoin>(includeInactive: true);
+        RuntimeSnapshot.Log($"CharSelectClickToJoin instances: {clickToJoins.Length} " +
+            $"[{string.Join(", ", clickToJoins.Select(c => $"box{c.csb?.RectangleIndex}(active={c.gameObject.activeInHierarchy})"))}]",
+            verbose: false);
+
         RuntimeSnapshot.LogGlobalState("CharacterSelectHandler.Awake.Postfix", verbose: false);
     }
 }
@@ -38,6 +56,123 @@ internal static class CharSelectClickToJoinCurrentIndexPatch
 
         __result = occupied.Length - 1;
         return false;
+    }
+}
+
+/// <summary>
+/// The vanilla LateUpdate only processes joins when CurrentlyActiveIndex() == csb.RectangleIndex.
+/// Since cloned boxes (slots 4+) have their CharSelectClickToJoin destroyed (to avoid duplicate
+/// input issues), no instance's RectangleIndex matches slots 4+. This postfix piggybacks on
+/// box 0's LateUpdate to handle gamepad joins for the expanded slots.
+/// </summary>
+[HarmonyPatch(typeof(CharSelectClickToJoin), "LateUpdate")]
+internal static class CharSelectClickToJoinExpandedSlotsPatch
+{
+    [HarmonyPostfix]
+    private static void Postfix(CharSelectClickToJoin __instance)
+    {
+        // Only run from one instance to avoid processing multiple times per frame
+        if (__instance.csb.RectangleIndex != 0)
+        {
+            return;
+        }
+
+        // Find the next free slot
+        var occupied = CharacterSelectBox.occupiedRectangles;
+        if (occupied == null)
+        {
+            return;
+        }
+
+        var nextFreeSlot = -1;
+        var playableSlots = Mathf.Min(Plugin.TargetPlayerCount, Mathf.Max(0, occupied.Length - 1));
+        for (var i = 0; i < playableSlots; i++)
+        {
+            if (!occupied[i])
+            {
+                nextFreeSlot = i;
+                break;
+            }
+        }
+
+        // Vanilla LateUpdate already handles slots 0-3 (original boxes have their own CharSelectClickToJoin)
+        if (nextFreeSlot < 4)
+        {
+            return;
+        }
+
+        // Get the CharacterSelectBox for the target slot
+        var handler = Traverse.Create(typeof(CharacterSelectHandler)).Field<CharacterSelectHandler>("selfRef").Value;
+        if (handler == null)
+        {
+            return;
+        }
+
+        var boxes = Traverse.Create(handler).Field<CharacterSelectBox[]>("characterSelectBoxes").Value;
+        if (boxes == null || nextFreeSlot >= boxes.Length)
+        {
+            return;
+        }
+
+        var targetBox = boxes[nextFreeSlot];
+        if (targetBox == null)
+        {
+            return;
+        }
+
+        var targetMenuState = Traverse.Create(targetBox).Field<CharSelectMenu>("menuState").Value;
+        if (targetMenuState != (CharSelectMenu)0) // CharSelectMenu.join == 0
+        {
+            return;
+        }
+
+        // Check for keyboard join (if keyboard not already taken)
+        if (!CharacterSelectBox.keyboardMouseIsOccupied)
+        {
+            var keyboard = Keyboard.current;
+            if (keyboard != null && keyboard.anyKey.wasPressedThisFrame && !keyboard.escapeKey.wasPressedThisFrame)
+            {
+                CharacterSelectBox.deviceIds[nextFreeSlot] = 0;
+                targetBox.UseskeyboardMouse = true;
+                CharacterSelectBox.keyboardMouseIsOccupied = true;
+                targetBox.OnEnterSelect();
+                AudioManager.Get().Play("accept");
+                RuntimeSnapshot.Log($"Expanded slot join: keyboard → slot {nextFreeSlot}.", verbose: false);
+                return;
+            }
+        }
+
+        // Check for gamepad joins
+        var deviceIds = CharacterSelectBox.deviceIds;
+        foreach (var gamepad in Gamepad.all)
+        {
+            // Skip if this gamepad is already assigned to any slot
+            var alreadyAssigned = false;
+            for (var j = 0; j < deviceIds.Length; j++)
+            {
+                if (deviceIds[j] == gamepad.deviceId)
+                {
+                    alreadyAssigned = true;
+                    break;
+                }
+            }
+
+            if (alreadyAssigned)
+            {
+                continue;
+            }
+
+            if (gamepad.startButton.wasPressedThisFrame || gamepad.aButton.wasPressedThisFrame)
+            {
+                CharacterSelectBox.deviceIds[nextFreeSlot] = gamepad.deviceId;
+                targetBox.UseskeyboardMouse = false;
+                targetBox.currentGamePad = gamepad;
+                targetBox.OnEnterSelect();
+                AudioManager.Get().Play("accept");
+                RuntimeSnapshot.Log($"Expanded slot join: gamepad {gamepad.deviceId} → slot {nextFreeSlot}.", verbose: false);
+                return;
+            }
+        }
     }
 }
 

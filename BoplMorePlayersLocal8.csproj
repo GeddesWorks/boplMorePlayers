@@ -4,7 +4,7 @@
     <AssemblyName>BoplMorePlayersLocal8</AssemblyName>
     <RootNamespace>BoplMorePlayersLocal8</RootNamespace>
     <Description>8-player local couch multiplayer expansion for Bopl Battle.</Description>
-    <Version>0.0.4</Version>
+    <Version>0.0.13</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
@@ -66,7 +66,7 @@
   <PropertyGroup>
     <ThunderstoreDir>$(MSBuildProjectDirectory)\thunderstore</ThunderstoreDir>
     <ThunderstoreStagingDir>$(IntermediateOutputPath)thunderstore_staging</ThunderstoreStagingDir>
-    <ThunderstoreZip>$(MSBuildProjectDirectory)\thunderstore\BoplExpLocal_TestBuild-$(Version).zip</ThunderstoreZip>
+    <ThunderstoreZip>$(MSBuildProjectDirectory)\thunderstore\FixedMoreBopl-$(Version).zip</ThunderstoreZip>
   </PropertyGroup>
   <Target Name="PackThunderstore" DependsOnTargets="Build">
     <MakeDir Directories="$(ThunderstoreStagingDir)" />

@@ -37,8 +37,9 @@ $projectDir   = $PSScriptRoot
 $csproj       = Join-Path $projectDir "BoplMorePlayersLocal8.csproj"
 $manifestPath = Join-Path $projectDir "thunderstore\manifest.json"
 
-# ── Read current version ──
+# ── Read current version + name ──
 $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+$modName = $manifest.name
 $parts = $manifest.version_number -split '\.'
 $major = [int]$parts[0]; $minor = [int]$parts[1]; $patch = [int]$parts[2]
 
@@ -49,7 +50,7 @@ switch ($BumpType) {
     "patch" { $patch++ }
 }
 $newVersion = "$major.$minor.$patch"
-Write-Host "Version: $($manifest.version_number) -> $newVersion" -ForegroundColor Cyan
+Write-Host "Version: $($manifest.version_number) -> $newVersion ($modName)" -ForegroundColor Cyan
 
 # ── Update manifest.json ──
 $manifest.version_number = $newVersion
@@ -73,7 +74,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$zipPath = Join-Path $projectDir "thunderstore\BoplExpLocal_TestBuild-$newVersion.zip"
+$zipPath = Join-Path $projectDir "thunderstore\$modName-$newVersion.zip"
 if (-not (Test-Path $zipPath)) {
     Write-Host "Expected zip not found: $zipPath" -ForegroundColor Red
     exit 1
@@ -96,18 +97,59 @@ if (-not $Team) {
 
 Write-Host "Uploading v$newVersion to Thunderstore (team: $Team)..." -ForegroundColor Cyan
 
-$metadataJson = "{`"author_name`":`"$Team`",`"categories`":[],`"communities`":[`"bopl-battle`"],`"has_nsfw_content`":false}"
+$baseUrl = "https://thunderstore.io/api/experimental"
+$headers = @{ Authorization = "Bearer $Token" }
+$fileSize = (Get-Item $zipPath).Length
+$fileName = Split-Path $zipPath -Leaf
 
-# Use curl.exe (ships with Windows 10+) for reliable binary multipart upload
-& curl.exe -s -S -f `
-    -X POST "https://thunderstore.io/api/experimental/submission/submit/" `
-    -H "Authorization: Bearer $Token" `
-    -F "metadata=$metadataJson;type=application/json" `
-    -F "file=@$zipPath;type=application/zip"
+# Step 1: Initiate upload
+Write-Host "  Initiating upload ($fileName, $fileSize bytes)..." -ForegroundColor Gray
+$initBody = @{ filename = $fileName; file_size_bytes = $fileSize } | ConvertTo-Json
+$initResp = Invoke-RestMethod -Uri "$baseUrl/usermedia/initiate-upload/" `
+    -Method Post -Headers $headers -ContentType "application/json" -Body $initBody
 
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "`nUpload failed. You can upload manually at https://thunderstore.io/c/bopl-battle/create/" -ForegroundColor Red
-    exit 1
+$uuid = $initResp.user_media.uuid
+$uploadUrls = $initResp.upload_urls
+Write-Host "  Upload UUID: $uuid ($($uploadUrls.Count) part(s))" -ForegroundColor Gray
+
+# Step 2: Upload file parts to presigned S3 URLs
+$fileBytes = [System.IO.File]::ReadAllBytes($zipPath)
+$parts = @()
+foreach ($part in $uploadUrls) {
+    $partNum = $part.part_number
+    $offset  = [int]$part.offset
+    $length  = [int]$part.length
+    $url     = $part.url
+
+    Write-Host "  Uploading part $partNum ($length bytes)..." -ForegroundColor Gray
+    $chunk = New-Object byte[] $length
+    [Array]::Copy($fileBytes, $offset, $chunk, 0, $length)
+
+    $resp = Invoke-WebRequest -Uri $url -Method Put -Body $chunk `
+        -ContentType "application/octet-stream" -UseBasicParsing
+    $etag = $resp.Headers["ETag"]
+    $parts += @{ ETag = $etag; PartNumber = $partNum }
 }
 
+# Step 3: Finish upload
+Write-Host "  Finishing upload..." -ForegroundColor Gray
+$finishBody = @{ parts = $parts } | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Uri "$baseUrl/usermedia/$uuid/finish-upload/" `
+    -Method Post -Headers $headers -ContentType "application/json" -Body $finishBody | Out-Null
+
+# Step 4: Submit package
+Write-Host "  Submitting package..." -ForegroundColor Gray
+$submitBody = @{
+    author_name      = $Team
+    upload_uuid      = $uuid
+    communities      = @("bopl-battle")
+    has_nsfw_content = $false
+    categories       = @()
+} | ConvertTo-Json -Depth 5
+
+$submitResp = Invoke-RestMethod -Uri "$baseUrl/submission/submit/" `
+    -Method Post -Headers $headers -ContentType "application/json" -Body $submitBody
+
 Write-Host "`nUploaded v$newVersion!" -ForegroundColor Green
+$pkgUrl = "https://thunderstore.io/c/bopl-battle/p/$Team/$modName/v$newVersion/"
+Write-Host "Package: $pkgUrl" -ForegroundColor Cyan

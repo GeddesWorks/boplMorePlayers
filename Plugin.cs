@@ -11,8 +11,8 @@ namespace BoplMorePlayersLocal8;
 [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
 public sealed class Plugin : BaseUnityPlugin
 {
-    public const string PluginGuid = "com.collin.boplmoreplayerslocal8";
-    public const string PluginName = "Bopl More Players Local 8";
+    public const string PluginGuid = "com.geddesworks.fixedmorebopl";
+    public const string PluginName = "FixedMoreBopl";
     public const string PluginVersion = "0.1.0";
 
     internal static Plugin Instance { get; private set; } = null!;
