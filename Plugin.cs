@@ -27,6 +27,7 @@ public sealed class Plugin : BaseUnityPlugin
     internal static ConfigEntry<bool> IncreaseCameraZoomForCrowdedMatches = null!;
     internal static ConfigEntry<bool> RelaxColorUniquenessWhenFull = null!;
     internal static ConfigEntry<bool> ExpandDrawWinnerUiSlots = null!;
+    internal static ConfigEntry<bool> EnablePhysicsWatchdog = null!;
 
     internal static int TargetPlayerCount => Mathf.Clamp(TargetLocalPlayers.Value, 4, 8);
     internal static int SlotArrayLength => TargetPlayerCount + 1;
@@ -43,6 +44,7 @@ public sealed class Plugin : BaseUnityPlugin
 
         SceneManager.sceneLoaded += OnSceneLoaded;
         SceneManager.sceneUnloaded += OnSceneUnloaded;
+        DiagnosticsHooks.Subscribe();
 
         _harmony = new Harmony(PluginGuid);
         _harmony.PatchAll(Assembly.GetExecutingAssembly());
@@ -60,10 +62,16 @@ public sealed class Plugin : BaseUnityPlugin
         RuntimeSnapshot.LogGlobalState("Plugin.Awake", verbose: false);
     }
 
+    private void Update()
+    {
+        PlayerPhysicsWatchdog.Tick();
+    }
+
     private void OnDestroy()
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
         SceneManager.sceneUnloaded -= OnSceneUnloaded;
+        DiagnosticsHooks.Unsubscribe();
     }
 
     private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -132,6 +140,13 @@ public sealed class Plugin : BaseUnityPlugin
             "ExpandDrawWinnerUiSlots",
             true,
             "Clone draw-winner UI slots when needed to avoid out-of-range errors with more than 4 players.");
+
+        EnablePhysicsWatchdog = Config.Bind(
+            "Diagnostics",
+            "EnablePhysicsWatchdog",
+            true,
+            "Periodically log every player's Rigidbody2D state (velocity, angular velocity, gravity scale) " +
+            "and flag anomalies, to help diagnose stuck spin/anti-gravity states for players 5-8.");
     }
 
     private void ApplyEarlyRuntimeOverrides()

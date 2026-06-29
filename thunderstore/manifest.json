@@ -1,6 +1,6 @@
 ﻿{
     "name":  "FixedMoreBopl",
-    "version_number":  "0.0.13",
+    "version_number":  "0.0.14",
     "website_url":  "",
     "description":  "Expand Bopl Battle local couch multiplayer to 8 players.",
     "dependencies":  [
