@@ -4,7 +4,7 @@
     <AssemblyName>BoplMorePlayersLocal8</AssemblyName>
     <RootNamespace>BoplMorePlayersLocal8</RootNamespace>
     <Description>8-player local couch multiplayer expansion for Bopl Battle.</Description>
-    <Version>0.0.13</Version>
+    <Version>0.0.14</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
@@ -43,6 +43,10 @@
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>$(BoplBattleManagedDir)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.Physics2DModule">
+      <HintPath>$(BoplBattleManagedDir)\UnityEngine.Physics2DModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
