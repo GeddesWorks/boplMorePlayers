@@ -6,6 +6,16 @@ BepInEx + Harmony mod for local couch expansion to 8 players.
 
 If you want to test an 8-player local session with only one physical controller, enable `Input/MirrorPrimaryInputToExtraLocalPlayers` in the mod config. That mirrors the first local player's live input state onto the other local players during local/offline play.
 
+## Beam stuck/unkillable fix (players 5-8)
+
+[Issue #2](https://github.com/geddesworks/boplmoreplayers/issues/2) was caused by vanilla per-player
+sound names. `Beam` plays `"beamCharge" + player.Id`, but the game only ships `beamCharge1`-`beamCharge4`.
+For players 5-8 `AudioManager.PlayInterruptable` returns index -1, and `Beam.ExitAbility` then throws
+`IndexOutOfRangeException` in `AudioManager.TimesSoundsPlayed` before the player leaves beam form, so
+kills never complete and the bounds check keeps pushing the player upward. `Patches/PerPlayerSoundPatches.cs`
+maps missing per-player sounds for slots 5-8 onto slots 1-4 (this also restores walk/jump/land sounds) and
+makes `TimesSoundsPlayed` tolerate a failed lookup.
+
 ## Diagnosing the Beam spin/anti-gravity bug (players 5-8)
 
 [Issue #2](https://github.com/geddesworks/boplmoreplayers/issues/2) tracks a bug where a
